@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>電話番号検索ダッシュボード</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#F0F2F5; --surface:#FFF; --border:#D8DDE6;
+    --text:#1A1D23; --muted:#7A8294; --sub:#B0B6C4;
+    --elec:#D97706; --elec-bg:#FEF3C7;
+    --gas:#DC2626;  --gas-bg:#FEE2E2;
+    --wtr:#2563EB;  --wtr-bg:#DBEAFE;
+    --hit:#059669;  --hit-bg:#ECFDF5; --hit-br:#6EE7B7;
+    --miss:#DC2626; --miss-bg:#FEF2F2; --miss-br:#FECACA;
+    --warn:#D97706; --warn-bg:#FFFBEB; --warn-br:#FDE68A;
+    --info:#2563EB; --info-bg:#EFF6FF; --info-br:#BFDBFE;
+    --cond:#7c3aed; --cond-bg:#f5f3ff; --cond-br:#c4b5fd;
+    --na:#6b7280; --na-bg:#f3f4f6; --na-br:#d1d5db;
+    --sh:0 2px 8px rgba(0,0,0,.07),0 0 1px rgba(0,0,0,.08);
+    --r:13px;
+  }
+  [data-dark] {
+    --bg:#111318; --surface:#1C1F27; --border:#2C303C;
+    --text:#E4E6EE; --muted:#5C6278; --sub:#3A3D4E;
+    --elec-bg:#1C1300; --gas-bg:#1C0404; --wtr-bg:#040E24;
+    --hit-bg:#022C1A; --hit-br:#065F46;
+    --miss-bg:#1C0404; --miss-br:#7F1D1D;
+    --warn-bg:#1C1300; --warn-br:#92400E;
+    --info-bg:#0C1929; --info-br:#1E40AF;
+    --cond-bg:#1a1033; --cond-br:#5b21b6;
+    --na-bg:#1f2028; --na-br:#374151;
+    --sh:0 2px 8px rgba(0,0,0,.3),0 0 1px rgba(0,0,0,.4);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;transition:background .2s,color .2s}
+
+  .topbar{height:46px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:10px;position:sticky;top:0;z-index:50;box-shadow:var(--sh)}
+  .topbar-title{font-weight:700;font-size:14px;letter-spacing:-.01em;flex:1}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:#aaa;margin-right:4px;flex-shrink:0}
+  .status-dot.ok{background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.4)}
+  .status-dot.ng{background:#ef4444}
+  .status-dot.loading{background:#f59e0b;animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .status-text{font-size:11px;color:var(--muted);margin-right:12px}
+  .dk-wrap{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none}
+  .dk-track{width:38px;height:21px;background:var(--border);border-radius:11px;position:relative;transition:background .2s;flex-shrink:0}
+  [data-dark] .dk-track{background:var(--wtr)}
+  .dk-thumb{width:15px;height:15px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s cubic-bezier(.34,1.56,.64,1);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  [data-dark] .dk-thumb{transform:translateX(17px)}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:auto 1fr;gap:12px;padding:14px;height:calc(100vh - 46px)}
+  .card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;transition:background .2s,border-color .2s}
+  .card-search{display:flex;flex-direction:column;gap:10px;padding:13px 15px;grid-row:1}
+  .card-result{grid-row:2;overflow-y:auto}
+
+  .sh{display:flex;align-items:center;gap:8px}
+  .ic{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+  .elec .ic{background:var(--elec-bg)} .gas .ic{background:var(--gas-bg)} .wtr .ic{background:var(--wtr-bg)}
+  .lbl{font-weight:700;font-size:14px}
+  .elec .lbl{color:var(--elec)} .gas .lbl{color:var(--gas)} .wtr .lbl{color:var(--wtr)}
+
+  .irow{display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg);transition:border-color .15s,box-shadow .15s}
+  .elec .irow:focus-within{border-color:var(--elec);box-shadow:0 0 0 3px rgba(217,119,6,.12)}
+  .gas  .irow:focus-within{border-color:var(--gas); box-shadow:0 0 0 3px rgba(220,38,38,.12)}
+  .wtr  .irow:focus-within{border-color:var(--wtr); box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .pi{flex:1;border:none;outline:none;background:transparent;padding:9px 11px;font-family:'DM Mono',monospace;font-size:14px;color:var(--text);letter-spacing:.04em;min-width:0}
+  .pi::placeholder{font-family:'Noto Sans JP',sans-serif;font-size:12px;color:var(--sub);letter-spacing:0}
+  .sb{border:none;padding:9px 13px;cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;font-weight:500;color:#fff;white-space:nowrap;flex-shrink:0;transition:opacity .15s}
+  .sb:hover:not(:disabled){opacity:.85}
+  .elec .sb{background:var(--elec)} .gas .sb{background:var(--gas)} .wtr .sb{background:var(--wtr)}
+
+  .s-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:7px;color:var(--sub);padding:20px}
+  .s-empty-ico{font-size:30px;opacity:.25}
+  .s-empty-txt{font-size:12px;letter-spacing:.04em}
+  .s-load{display:flex;align-items:center;justify-content:center;height:100%;gap:5px}
+  .dot{width:7px;height:7px;border-radius:50%;animation:db 1.1s ease-in-out infinite}
+  .elec-r .dot{background:var(--elec)} .gas-r .dot{background:var(--gas)} .wtr-r .dot{background:var(--wtr)}
+  .dot:nth-child(2){animation-delay:.18s} .dot:nth-child(3){animation-delay:.36s}
+  @keyframes db{0%,80%,100%{transform:scale(.7);opacity:.35}40%{transform:scale(1.3);opacity:1}}
+
+  .ri{padding:16px 18px;animation:fu .25s ease}
+  @keyframes fu{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+  .rphrow{display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap}
+  .rph{font-family:'DM Mono',monospace;font-size:15px;font-weight:500;letter-spacing:.04em}
+  .badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;border:1px solid}
+  .b-hit{background:var(--hit-bg);color:var(--hit);border-color:var(--hit-br)}
+  .b-miss{background:var(--miss-bg);color:var(--miss);border-color:var(--miss-br)}
+
+  .result-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px}
+  .result-card+.result-card{margin-top:8px}
+  .rc-row{display:flex;gap:16px;margin-bottom:12px}
+  .rc-row:last-child{margin-bottom:0}
+  .rc-item{flex:1}
+  .rc-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+  .rc-value{font-size:13px;color:var(--text);line-height:1.6}
+  .rc-value.v-ok{color:var(--hit);font-weight:700}
+  .rc-value.v-ng{color:var(--miss);font-weight:700}
+  .rc-value.v-cond{color:var(--cond);font-weight:700}
+  .rc-value.v-na{color:var(--na);font-weight:500}
+  .rc-value.v-empty{color:var(--sub);font-style:italic}
+  .rc-full{margin-bottom:12px}
+  .rc-full:last-child{margin-bottom:0}
+
+  .alert{border-radius:8px;padding:14px 16px;margin-top:10px;font-size:12.5px;line-height:1.7;border:1px solid}
+  .alert-warn{background:var(--warn-bg);border-color:var(--warn-br);color:var(--warn)}
+  .alert-info{background:var(--info-bg);border-color:var(--info-br);color:var(--info)}
+  .alert a{color:var(--wtr);font-weight:600;text-decoration:underline}
+  .alert a:hover{opacity:.8}
+  .miss-msg{font-size:13px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="topbar-title">📋 電話番号検索ダッシュボード</span>
+  <div class="status-dot loading" id="st-dot"></div>
+  <span class="status-text" id="st-text">読み込み中…</span>
+  <div class="dk-wrap" onclick="toggleDark()">
+    <span>☀</span>
+    <div class="dk-track"><div class="dk-thumb"></div></div>
+    <span>🌙</span>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="card card-search elec">
+    <div class="sh"><div class="ic">⚡</div><span class="lbl">電気</span></div>
+    <div class="irow">
+      <input class="pi" id="q-elec" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
+        onkeydown="if(event.key==='Enter')go('elec')">
+      <button class="sb" onclick="go('elec')">検索</button>
+    </div>
+  </div>
+  <div class="card card-search gas">
+    <div class="sh"><div class="ic">🔥</div><span class="lbl">ガス</span></div>
+    <div class="irow">
+      <input class="pi" id="q-gas" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
+        onkeydown="if(event.key==='Enter')go('gas')">
+      <button class="sb" onclick="go('gas')">検索</button>
+    </div>
+  </div>
+  <div class="card card-search wtr">
+    <div class="sh"><div class="ic">💧</div><span class="lbl">水道</span></div>
+    <div class="irow">
+      <input class="pi" id="q-wtr" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
+        onkeydown="if(event.key==='Enter')go('wtr')">
+      <button class="sb" onclick="go('wtr')">検索</button>
+    </div>
+  </div>
+
+  <div class="card card-result" id="r-elec">
+    <div class="s-empty"><div class="s-empty-ico">⚡</div><div class="s-empty-txt">電話番号を入力して検索</div></div>
+  </div>
+  <div class="card card-result" id="r-gas">
+    <div class="s-empty"><div class="s-empty-ico">🔥</div><div class="s-empty-txt">電話番号を入力して検索</div></div>
+  </div>
+  <div class="card card-result" id="r-wtr">
+    <div class="s-empty"><div class="s-empty-ico">💧</div><div class="s-empty-txt">電話番号を入力して検索</div></div>
+  </div>
+</div>
+
+<script>
+/* ====== スプレッドシートURL（直接埋込） ====== */
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQKSJF2qsdE6kZWUTqpKFbbdpmFggSOWIx4B1qr2dyj3z3VXs1c3FfYZbiYcJpM93YW9lTLbNfWktwh/pub?gid=0&single=true&output=csv';
+const FORM_URL = '#'; /* Googleフォーム作成後にここを差し替え */
+
+/* ====== 列名（実データ準拠） ====== */
+const COL = {
+  id:    '管理ID',
+  phone: '検索用番号',
+  disp:  '表示用番号',
+  infra: 'インフラ種別',
+  dest:  '手配先名称',
+  area:  '地域名',
+  proxy: '代行判定',
+  note:  '備考'
+};
+
+const INFRA_MAP = { elec:'電気', gas:'ガス', wtr:'水道' };
+let DATA = [];
+
+/* ====== 初期化 ====== */
+(function init(){
+  if(localStorage.getItem('dk')==='1') document.documentElement.setAttribute('data-dark','');
+  loadData();
+})();
+
+/* ====== ダークモード ====== */
+function toggleDark(){
+  const on=document.documentElement.toggleAttribute('data-dark');
+  localStorage.setItem('dk',on?'1':'');
+}
+
+/* ====== ステータス ====== */
+function updateStatus(type, msg){
+  const dot=document.getElementById('st-dot');
+  const txt=document.getElementById('st-text');
+  dot.className='status-dot '+type;
+  txt.textContent=msg;
+}
+
+/* ====== CSV読込 ====== */
+async function loadData(){
+  updateStatus('loading','データ読み込み中…');
+  try{
+    const res=await fetch(SHEET_URL);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    DATA=parseCSV(await res.text());
+    if(DATA.length===0) throw new Error('データが0件です');
+    updateStatus('ok', DATA.length+'件 読込済');
+  }catch(e){
+    updateStatus('ng','読込失敗: '+e.message);
+  }
+}
+
+function parseCSV(t){
+  const ls=t.trim().split(/\r?\n/);
+  if(ls.length<2)return[];
+  const hs=splitCSV(ls[0]).map(h=>h.replace(/^\uFEFF/,'').trim());
+  return ls.slice(1).filter(l=>l.trim()).map(l=>{
+    const vs=splitCSV(l); const o={};
+    hs.forEach((h,i)=>o[h]=(vs[i]||'').trim());
+    return o;
+  });
+}
+function splitCSV(line){
+  const r=[];let c='',q=false;
+  for(const ch of line){if(ch==='"')q=!q;else if(ch===','&&!q){r.push(c);c='';}else c+=ch;}
+  r.push(c);return r;
+}
+
+/* ====== ユーティリティ ====== */
+function digits(s){ return(s||'').replace(/[^\d]/g,''); }
+function formatPhone(d){
+  if(d.length===11) return d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
+  if(d.length===10) return d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+  return d;
+}
+
+/* ====== バリデーション ====== */
+function validate(raw){
+  const d=digits(raw);
+  if(d.length<10||d.length>11){
+    return{ok:false, msg:'電話番号は10桁または11桁で入力してください（現在: '+d.length+'桁）'};
+  }
+  return{ok:true, digits:d};
+}
+
+/* ====== 代行判定の分類 ====== */
+function proxyClass(val){
+  if(/○|可/.test(val) && !/不可|×|条件/.test(val)) return 'v-ok';
+  if(/×|不可/.test(val)) return 'v-ng';
+  if(/△|条件/.test(val)) return 'v-cond';
+  if(val==='-'||val===''||val==='—') return 'v-na';
+  return '';
+}
+
+/* ====== 検索 ====== */
+function go(panel){
+  const input=document.getElementById('q-'+panel);
+  const el=document.getElementById('r-'+panel);
+  const raw=input.value.trim();
+  const ico=panel==='elec'?'⚡':panel==='gas'?'🔥':'💧';
+
+  if(!raw){
+    el.innerHTML='<div class="s-empty"><div class="s-empty-ico">'+ico+'</div><div class="s-empty-txt">電話番号を入力して検索</div></div>';
+    return;
+  }
+
+  const v=validate(raw);
+  if(!v.ok){
+    el.innerHTML='<div class="ri"><div class="alert alert-warn">⚠ '+v.msg+'</div></div>';
+    return;
+  }
+
+  if(DATA.length===0){
+    el.innerHTML='<div class="ri"><div class="alert alert-warn">⚠ データが読み込まれていません。ページを再読み込みしてください。</div></div>';
+    return;
+  }
+
+  el.innerHTML='<div class="s-load '+panel+'-r"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+
+  setTimeout(()=>{
+    const query=v.digits;
+    const infraType=INFRA_MAP[panel];
+
+    const hits=DATA.filter(row=>{
+      const ri=(row[COL.infra]||'').trim();
+      /* インフラ種別フィルタ：完全一致 or 複合（ガス・水道など）に対応 */
+      if(!ri.includes(infraType)) return false;
+      const rd=digits(row[COL.phone]);
+      return rd===query;
+    });
+
+    if(hits.length>0) renderHits(el,query,hits);
+    else renderMiss(el,raw);
+  },200);
+}
+
+/* ====== ヒット表示 ====== */
+function renderHits(el,query,hits){
+  const cards=hits.map(r=>{
+    const proxy=(r[COL.proxy]||'').trim();
+    const cls=proxyClass(proxy);
+    const note=r[COL.note]||'';
+    const dest=r[COL.dest]||'';
+    const area=r[COL.area]||'';
+    const infra=(r[COL.infra]||'').trim();
+
+    return '<div class="result-card">'+
+      '<div class="rc-row">'+
+        '<div class="rc-item"><div class="rc-label">インフラ種別</div><div class="rc-value">'+infra+'</div></div>'+
+        '<div class="rc-item"><div class="rc-label">代行判定</div><div class="rc-value '+cls+'">'+(proxy||'—')+'</div></div>'+
+      '</div>'+
+      '<div class="rc-full"><div class="rc-label">備考</div><div class="rc-value'+(note?'':' v-empty')+'">'+(note||'なし')+'</div></div>'+
+      '<div class="rc-full"><div class="rc-label">手配先名称</div><div class="rc-value">'+(dest||'—')+'</div></div>'+
+      '<div class="rc-full"><div class="rc-label">地域名</div><div class="rc-value">'+(area||'—')+'</div></div>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML='<div class="ri">'+
+    '<div class="rphrow">'+
+      '<span class="rph">'+formatPhone(query)+'</span>'+
+      '<span class="badge b-hit">✓ 登録あり</span>'+
+    '</div>'+
+    cards+
+  '</div>';
+}
+
+/* ====== 未登録表示 ====== */
+function renderMiss(el,raw){
+  el.innerHTML='<div class="ri">'+
+    '<div class="rphrow">'+
+      '<span class="rph">'+raw+'</span>'+
+      '<span class="badge b-miss">✕ 未登録</span>'+
+    '</div>'+
+    '<div class="miss-msg">この電話番号は登録されていません。</div>'+
+    '<div class="alert alert-info" style="margin-top:14px">'+
+      '📝 代行は「<strong>可能</strong>」です。<br>'+
+      '代行を希望の場合は <a href="'+FORM_URL+'" target="_blank">Google フォーム</a> より申請お願いします。'+
+    '</div>'+
+  '</div>';
+}
+</script>
+
+</body>
+</html>
