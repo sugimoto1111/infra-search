@@ -38,7 +38,6 @@
   html,body{height:100%}
   body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;transition:background .2s,color .2s}
 
-  /* パスワード画面 */
   .lock-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;transition:opacity .3s}
   .lock-screen.hidden{opacity:0;pointer-events:none}
   .lock-box{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:36px 32px;width:380px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.12);text-align:center}
@@ -51,7 +50,6 @@
   .lock-btn:hover{opacity:.85}
   .lock-error{color:var(--miss);font-size:12px;margin-top:10px;min-height:18px;font-weight:500}
 
-  /* メイン */
   .app{display:none}
   .app.visible{display:flex;flex-direction:column;height:100vh}
 
@@ -71,7 +69,6 @@
   .dk-thumb{width:15px;height:15px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s cubic-bezier(.34,1.56,.64,1);box-shadow:0 1px 3px rgba(0,0,0,.2)}
   [data-dark] .dk-thumb{transform:translateX(17px)}
 
-  /* PC: 3列 */
   .pc-grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:auto 1fr;gap:12px;padding:14px;flex:1;overflow:hidden}
   .card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;transition:background .2s,border-color .2s}
   .card-search{display:flex;flex-direction:column;gap:10px;padding:13px 15px;grid-row:1}
@@ -83,12 +80,15 @@
   .lbl{font-weight:700;font-size:14px}
   .elec .lbl{color:var(--elec)} .gas .lbl{color:var(--gas)} .wtr .lbl{color:var(--wtr)}
 
-  .irow{display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg);transition:border-color .15s,box-shadow .15s}
+  .irow{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg);transition:border-color .15s,box-shadow .15s}
   .elec .irow:focus-within{border-color:var(--elec);box-shadow:0 0 0 3px rgba(217,119,6,.12)}
   .gas  .irow:focus-within{border-color:var(--gas);box-shadow:0 0 0 3px rgba(220,38,38,.12)}
   .wtr  .irow:focus-within{border-color:var(--wtr);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
   .pi{flex:1;border:none;outline:none;background:transparent;padding:9px 11px;font-family:'DM Mono',monospace;font-size:14px;color:var(--text);letter-spacing:.04em;min-width:0}
   .pi::placeholder{font-family:'Noto Sans JP',sans-serif;font-size:12px;color:var(--sub);letter-spacing:0}
+  .cb{border:none;background:transparent;color:var(--sub);font-size:16px;cursor:pointer;padding:0 8px;line-height:1;display:none;transition:color .15s}
+  .cb:hover{color:var(--text)}
+  .cb.show{display:block}
   .sb{border:none;padding:9px 13px;cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;font-weight:500;color:#fff;white-space:nowrap;flex-shrink:0;transition:opacity .15s}
   .sb:hover:not(:disabled){opacity:.85}
   .elec .sb{background:var(--elec)} .gas .sb{background:var(--gas)} .wtr .sb{background:var(--wtr)}
@@ -133,7 +133,6 @@
   .alert a:hover{opacity:.8}
   .miss-msg{font-size:13px;color:var(--muted);margin-top:6px}
 
-  /* スマホ用タブ */
   .sp-view{display:none;flex-direction:column;flex:1;overflow:hidden}
   .sp-tabs{display:flex;background:var(--surface);border-bottom:2px solid var(--border);flex-shrink:0}
   .sp-tab{flex:1;padding:12px 0;text-align:center;font-size:14px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;color:var(--muted);background:none;border-top:none;border-left:none;border-right:none}
@@ -170,7 +169,6 @@
 </head>
 <body>
 
-<!-- パスワード画面 -->
 <div class="lock-screen" id="lockScreen">
   <div class="lock-box">
     <div class="lock-icon">🔒</div>
@@ -183,7 +181,6 @@
   </div>
 </div>
 
-<!-- メイン画面 -->
 <div class="app" id="app">
 
 <header class="topbar">
@@ -204,7 +201,8 @@
     <div class="sh"><div class="ic">⚡</div><span class="lbl">電気</span></div>
     <div class="irow">
       <input class="pi" id="q-elec" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
-        onkeydown="if(event.key==='Enter')go('elec')">
+        oninput="toggleClear('q-elec','c-elec')" onkeydown="if(event.key==='Enter')go('elec')">
+      <button class="cb" id="c-elec" onclick="clearInput('q-elec','c-elec','r-elec','elec')">×</button>
       <button class="sb" onclick="go('elec')">検索</button>
     </div>
   </div>
@@ -212,7 +210,8 @@
     <div class="sh"><div class="ic">🔥</div><span class="lbl">ガス</span></div>
     <div class="irow">
       <input class="pi" id="q-gas" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
-        onkeydown="if(event.key==='Enter')go('gas')">
+        oninput="toggleClear('q-gas','c-gas')" onkeydown="if(event.key==='Enter')go('gas')">
+      <button class="cb" id="c-gas" onclick="clearInput('q-gas','c-gas','r-gas','gas')">×</button>
       <button class="sb" onclick="go('gas')">検索</button>
     </div>
   </div>
@@ -220,7 +219,8 @@
     <div class="sh"><div class="ic">💧</div><span class="lbl">水道</span></div>
     <div class="irow">
       <input class="pi" id="q-wtr" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
-        onkeydown="if(event.key==='Enter')go('wtr')">
+        oninput="toggleClear('q-wtr','c-wtr')" onkeydown="if(event.key==='Enter')go('wtr')">
+      <button class="cb" id="c-wtr" onclick="clearInput('q-wtr','c-wtr','r-wtr','wtr')">×</button>
       <button class="sb" onclick="go('wtr')">検索</button>
     </div>
   </div>
@@ -247,7 +247,8 @@
       <div class="sh"><div class="ic">⚡</div><span class="lbl">電気</span></div>
       <div class="irow">
         <input class="pi" id="sq-elec" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
-          onkeydown="if(event.key==='Enter')goSp('elec')">
+          oninput="toggleClear('sq-elec','sc-elec')" onkeydown="if(event.key==='Enter')goSp('elec')">
+        <button class="cb" id="sc-elec" onclick="clearInput('sq-elec','sc-elec','sr-elec','elec')">×</button>
         <button class="sb" onclick="goSp('elec')">検索</button>
       </div>
     </div>
@@ -260,7 +261,8 @@
       <div class="sh"><div class="ic">🔥</div><span class="lbl">ガス</span></div>
       <div class="irow">
         <input class="pi" id="sq-gas" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
-          onkeydown="if(event.key==='Enter')goSp('gas')">
+          oninput="toggleClear('sq-gas','sc-gas')" onkeydown="if(event.key==='Enter')goSp('gas')">
+        <button class="cb" id="sc-gas" onclick="clearInput('sq-gas','sc-gas','sr-gas','gas')">×</button>
         <button class="sb" onclick="goSp('gas')">検索</button>
       </div>
     </div>
@@ -273,7 +275,8 @@
       <div class="sh"><div class="ic">💧</div><span class="lbl">水道</span></div>
       <div class="irow">
         <input class="pi" id="sq-wtr" type="tel" maxlength="13" placeholder="電話番号を入力（10〜11桁）"
-          onkeydown="if(event.key==='Enter')goSp('wtr')">
+          oninput="toggleClear('sq-wtr','sc-wtr')" onkeydown="if(event.key==='Enter')goSp('wtr')">
+        <button class="cb" id="sc-wtr" onclick="clearInput('sq-wtr','sc-wtr','sr-wtr','wtr')">×</button>
         <button class="sb" onclick="goSp('wtr')">検索</button>
       </div>
     </div>
@@ -313,6 +316,21 @@ function unlock(){
   }
 })();
 
+/* ====== クリアボタン ====== */
+function toggleClear(inputId,btnId){
+  var val=document.getElementById(inputId).value;
+  document.getElementById(btnId).className='cb'+(val?' show':'');
+}
+
+function clearInput(inputId,btnId,resultId,panel){
+  var input=document.getElementById(inputId);
+  input.value='';
+  input.focus();
+  document.getElementById(btnId).className='cb';
+  var ico=panel==='elec'?'⚡':panel==='gas'?'🔥':'💧';
+  document.getElementById(resultId).innerHTML='<div class="s-empty"><div class="s-empty-ico">'+ico+'</div><div class="s-empty-txt">電話番号を入力して検索</div></div>';
+}
+
 /* ====== タブ切替 ====== */
 function switchTab(panel){
   ['elec','gas','wtr'].forEach(function(p){
@@ -343,15 +361,13 @@ function updateStatus(type,msg){
   document.getElementById('reloadBtn').className='reload-btn'+(type==='ng'?' show':'');
 }
 
-/* ====== CSV読込（リトライ付き） ====== */
+/* ====== CSV読込 ====== */
 function loadData(){
   if(isLoading)return;
   if(DATA.length>0){updateStatus('ok',DATA.length+'件 読込済');return;}
   isLoading=true;
   updateStatus('loading','データ読み込み中…');
-
   var url=SHEET_URL+'&t='+Date.now();
-
   fetch(url).then(function(res){
     if(!res.ok)throw new Error('HTTP '+res.status);
     return res.text();
@@ -363,24 +379,15 @@ function loadData(){
   }).catch(function(e){
     isLoading=false;
     updateStatus('ng','読込失敗: '+e.message);
-    /* 3秒後に自動リトライ（最大3回） */
     if(!loadData.retry)loadData.retry=0;
     loadData.retry++;
-    if(loadData.retry<=3){
-      setTimeout(function(){loadData();},3000);
-    }
+    if(loadData.retry<=3){setTimeout(function(){loadData();},3000);}
   });
 }
-
-function retryLoad(){
-  loadData.retry=0;
-  DATA=[];
-  loadData();
-}
+function retryLoad(){loadData.retry=0;DATA=[];loadData();}
 
 function parseCSV(t){
-  var ls=t.trim().split(/\r?\n/);
-  if(ls.length<2)return[];
+  var ls=t.trim().split(/\r?\n/);if(ls.length<2)return[];
   var hs=splitCSV(ls[0]).map(function(h){return h.replace(/^\uFEFF/,'').trim();});
   return ls.slice(1).filter(function(l){return l.trim();}).map(function(l){
     var vs=splitCSV(l);var o={};
@@ -390,12 +397,7 @@ function parseCSV(t){
 }
 function splitCSV(line){
   var r=[];var c='';var q=false;
-  for(var i=0;i<line.length;i++){
-    var ch=line[i];
-    if(ch==='"')q=!q;
-    else if(ch===','&&!q){r.push(c);c='';}
-    else c+=ch;
-  }
+  for(var i=0;i<line.length;i++){var ch=line[i];if(ch==='"')q=!q;else if(ch===','&&!q){r.push(c);c='';}else c+=ch;}
   r.push(c);return r;
 }
 
@@ -459,8 +461,7 @@ function search(panel,raw,el){
 function renderHits(el,query,hits){
   var cards='';
   for(var i=0;i<hits.length;i++){
-    var r=hits[i];
-    var proxy=(r[COL.proxy]||'').trim();var cls=proxyClass(proxy);
+    var r=hits[i];var proxy=(r[COL.proxy]||'').trim();var cls=proxyClass(proxy);
     var note=r[COL.note]||'';var dest=r[COL.dest]||'';var area=r[COL.area]||'';var infra=(r[COL.infra]||'').trim();
     cards+='<div class="result-card">'+
       '<div class="rc-row"><div class="rc-item"><div class="rc-label">インフラ種別</div><div class="rc-value">'+infra+'</div></div>'+
