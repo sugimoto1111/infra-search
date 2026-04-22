@@ -61,8 +61,9 @@
   .status-dot.loading{background:#f59e0b;animation:pulse 1s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .status-text{font-size:11px;color:var(--muted);margin-right:12px}
-  .reload-btn{font-size:10px;color:var(--wtr);background:var(--info-bg);border:1px solid var(--info-br);border-radius:5px;padding:3px 9px;cursor:pointer;display:none;margin-right:4px}
-  .reload-btn.show{display:inline-block}
+  /* #19 修正: 再読込ボタンを常時表示 */
+  .reload-btn{font-size:10px;color:var(--wtr);background:var(--info-bg);border:1px solid var(--info-br);border-radius:5px;padding:3px 9px;cursor:pointer;display:inline-block;margin-right:4px;transition:opacity .15s}
+  .reload-btn:hover{opacity:.7}
   .dk-wrap{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none}
   .dk-track{width:38px;height:21px;background:var(--border);border-radius:11px;position:relative;transition:background .2s;flex-shrink:0}
   [data-dark] .dk-track{background:var(--wtr)}
@@ -187,6 +188,7 @@
   <span class="topbar-title">📋 代行不可検索ダッシュボード</span>
   <div class="status-dot loading" id="st-dot"></div>
   <span class="status-text" id="st-text">読み込み中…</span>
+  <!-- #19 修正: 常時表示 -->
   <button class="reload-btn" id="reloadBtn" onclick="retryLoad()">🔄 再読込</button>
   <div class="dk-wrap" onclick="toggleDark()">
     <span>☀</span>
@@ -289,6 +291,16 @@
 </div>
 
 <script>
+/* ====== #2 XSS対策: escapeHTML ====== */
+function escapeHTML(s){
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
 /* ====== パスワード ====== */
 var PASS='intern@estate';
 var AUTH_KEY='infraDash_auth';
@@ -350,6 +362,9 @@ var INFRA_ICON={'電気':'⚡','ガス':'🔥','水道':'💧'};
 var DATA=[];
 var isLoading=false;
 
+/* ====== #15 setTimeout競合防止: パネルごとのタイマーID ====== */
+var searchTimers={elec:null,gas:null,wtr:null};
+
 /* ====== ダークモード ====== */
 (function(){if(localStorage.getItem('dk')==='1')document.documentElement.setAttribute('data-dark','');})();
 function toggleDark(){var on=document.documentElement.toggleAttribute('data-dark');localStorage.setItem('dk',on?'1':'');}
@@ -358,13 +373,14 @@ function toggleDark(){var on=document.documentElement.toggleAttribute('data-dark
 function updateStatus(type,msg){
   document.getElementById('st-dot').className='status-dot '+type;
   document.getElementById('st-text').textContent=msg;
-  document.getElementById('reloadBtn').className='reload-btn'+(type==='ng'?' show':'');
 }
 
 /* ====== CSV読込 ====== */
 function loadData(){
   if(isLoading)return;
-  if(DATA.length>0){updateStatus('ok',DATA.length+'件 読込済');return;}
+  /* #19 修正: DATA.length>0 でも強制リロード可能にする（retryLoadから呼ばれる場合） */
+  if(DATA.length>0&&!loadData.force){updateStatus('ok',DATA.length+'件 読込済');return;}
+  loadData.force=false;
   isLoading=true;
   updateStatus('loading','データ読み込み中…');
   var url=SHEET_URL+'&t='+Date.now();
@@ -384,8 +400,11 @@ function loadData(){
     if(loadData.retry<=3){setTimeout(function(){loadData();},3000);}
   });
 }
-function retryLoad(){loadData.retry=0;DATA=[];loadData();}
 
+/* #19 修正: retryLoad はいつでも使える（常時表示ボタン） */
+function retryLoad(){loadData.retry=0;DATA=[];loadData.force=true;loadData();}
+
+/* ====== CSVパーサー ====== */
 function parseCSV(t){
   var ls=t.trim().split(/\r?\n/);if(ls.length<2)return[];
   var hs=splitCSV(ls[0]).map(function(h){return h.replace(/^\uFEFF/,'').trim();});
@@ -393,6 +412,10 @@ function parseCSV(t){
     var vs=splitCSV(l);var o={};
     hs.forEach(function(h,i){o[h]=(vs[i]||'').trim();});
     return o;
+  }).filter(function(row){
+    /* #23 修正: 全フィールドが空の行を除外 */
+    for(var k in row){if(row[k]!=='')return true;}
+    return false;
   });
 }
 function splitCSV(line){
@@ -420,7 +443,10 @@ function proxyClass(val){
   if(val==='-'||val===''||val==='—')return 'v-na';
   return '';
 }
-function matchInfra(ri,it){return(ri||'').indexOf(it)!==-1;}
+
+/* #14 修正: 完全一致に変更（indexOf → ===） */
+function matchInfra(ri,it){return(ri||'').trim()===it;}
+
 function findOtherInfra(query,cur){
   var others=[];
   ['電気','ガス','水道'].forEach(function(inf){
@@ -442,10 +468,17 @@ function search(panel,raw,el){
   var ico=panel==='elec'?'⚡':panel==='gas'?'🔥':'💧';
   if(!raw){el.innerHTML='<div class="s-empty"><div class="s-empty-ico">'+ico+'</div><div class="s-empty-txt">電話番号を入力して検索</div></div>';return;}
   var v=validate(raw);
-  if(!v.ok){el.innerHTML='<div class="ri"><div class="alert alert-warn">⚠ '+v.msg+'</div></div>';return;}
+  /* #2 適用: エラーメッセージにもescapeHTML */
+  if(!v.ok){el.innerHTML='<div class="ri"><div class="alert alert-warn">⚠ '+escapeHTML(v.msg)+'</div></div>';return;}
   if(DATA.length===0){el.innerHTML='<div class="ri"><div class="alert alert-warn">⚠ データが読み込まれていません。ヘッダーの「🔄 再読込」ボタンを押すか、ページを再読み込みしてください。</div></div>';return;}
+
+  /* #15 修正: 前回のタイマーをキャンセルしてから新しいタイマーを設定 */
+  if(searchTimers[panel])clearTimeout(searchTimers[panel]);
+
   el.innerHTML='<div class="s-load '+panel+'-r"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
-  setTimeout(function(){
+
+  searchTimers[panel]=setTimeout(function(){
+    searchTimers[panel]=null;
     var query=v.digits;var infraType=INFRA_MAP[panel];
     var hits=[];
     for(var i=0;i<DATA.length;i++){
@@ -457,37 +490,44 @@ function search(panel,raw,el){
   },200);
 }
 
-/* ====== 表示 ====== */
+/* ====== 表示（#2 全箇所にescapeHTML適用） ====== */
 function renderHits(el,query,hits){
   var cards='';
   for(var i=0;i<hits.length;i++){
     var r=hits[i];var proxy=(r[COL.proxy]||'').trim();var cls=proxyClass(proxy);
     var note=r[COL.note]||'';var dest=r[COL.dest]||'';var area=r[COL.area]||'';var infra=(r[COL.infra]||'').trim();
     cards+='<div class="result-card">'+
-      '<div class="rc-row"><div class="rc-item"><div class="rc-label">インフラ種別</div><div class="rc-value">'+infra+'</div></div>'+
-      '<div class="rc-item"><div class="rc-label">代行判定</div><div class="rc-value '+cls+'">'+(proxy||'—')+'</div></div></div>'+
-      '<div class="rc-full"><div class="rc-label">備考</div><div class="rc-value'+(note?'':' v-empty')+'">'+(note||'なし')+'</div></div>'+
-      '<div class="rc-full"><div class="rc-label">手配先名称</div><div class="rc-value">'+(dest||'—')+'</div></div>'+
-      '<div class="rc-full"><div class="rc-label">地域名</div><div class="rc-value">'+(area||'—')+'</div></div></div>';
+      '<div class="rc-row"><div class="rc-item"><div class="rc-label">インフラ種別</div><div class="rc-value">'+escapeHTML(infra)+'</div></div>'+
+      '<div class="rc-item"><div class="rc-label">代行判定</div><div class="rc-value '+cls+'">'+escapeHTML(proxy||'—')+'</div></div></div>'+
+      '<div class="rc-full"><div class="rc-label">備考</div><div class="rc-value'+(note?'':' v-empty')+'">'+escapeHTML(note||'なし')+'</div></div>'+
+      '<div class="rc-full"><div class="rc-label">手配先名称</div><div class="rc-value">'+escapeHTML(dest||'—')+'</div></div>'+
+      '<div class="rc-full"><div class="rc-label">地域名</div><div class="rc-value">'+escapeHTML(area||'—')+'</div></div></div>';
   }
-  el.innerHTML='<div class="ri"><div class="rphrow"><span class="rph">'+formatPhone(query)+'</span><span class="badge b-hit">✓ 登録あり</span></div>'+cards+'</div>';
+  el.innerHTML='<div class="ri"><div class="rphrow"><span class="rph">'+escapeHTML(formatPhone(query))+'</span><span class="badge b-hit">✓ 登録あり</span></div>'+cards+'</div>';
 }
 
 function renderOtherInfra(el,raw,others){
   var otherNames='';var otherPanels='';
   for(var i=0;i<others.length;i++){
     if(i>0){otherNames+='・';otherPanels+='・';}
-    otherNames+=INFRA_ICON[others[i]]+' '+others[i];
-    otherPanels+='<strong>'+others[i]+'</strong>';
+    otherNames+=(INFRA_ICON[others[i]]||'')+' '+escapeHTML(others[i]);
+    otherPanels+='<strong>'+escapeHTML(others[i])+'</strong>';
   }
-  el.innerHTML='<div class="ri"><div class="rphrow"><span class="rph">'+raw+'</span><span class="badge b-other">↗ 別カテゴリで登録あり</span></div>'+
+  el.innerHTML='<div class="ri"><div class="rphrow"><span class="rph">'+escapeHTML(raw)+'</span><span class="badge b-other">↗ 別カテゴリで登録あり</span></div>'+
     '<div class="alert alert-other">🔍 この番号は '+otherNames+' で登録されています。<br>'+otherPanels+' の検索欄で再度検索してください。</div></div>';
 }
 
+/* #6 修正: フォームURL未設定時は「準備中」メッセージに変更 */
 function renderMiss(el,raw){
-  el.innerHTML='<div class="ri"><div class="rphrow"><span class="rph">'+raw+'</span><span class="badge b-miss">✕ 未登録</span></div>'+
+  var formLink='';
+  if(FORM_URL&&FORM_URL!=='#'){
+    formLink='代行を希望の場合は <a href="'+escapeHTML(FORM_URL)+'" target="_blank">Google フォーム</a> より申請お願いします。';
+  }else{
+    formLink='代行を希望の場合は、申請フォーム（準備中）より申請お願いします。';
+  }
+  el.innerHTML='<div class="ri"><div class="rphrow"><span class="rph">'+escapeHTML(raw)+'</span><span class="badge b-miss">✕ 未登録</span></div>'+
     '<div class="miss-msg">この電話番号はどのインフラにも登録されていません。</div>'+
-    '<div class="alert alert-info" style="margin-top:14px">📝 代行は「<strong>可能</strong>」です。<br>代行を希望の場合は <a href="'+FORM_URL+'" target="_blank">Google フォーム</a> より申請お願いします。</div></div>';
+    '<div class="alert alert-info" style="margin-top:14px">📝 代行は「<strong>可能</strong>」です。<br>'+formLink+'</div></div>';
 }
 </script>
 
