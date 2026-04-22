@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>電話番号検索ダッシュボード</title>
+<title>代行不可検索ダッシュボード</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -38,6 +38,23 @@
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;transition:background .2s,color .2s}
+
+  /* ====== パスワード画面 ====== */
+  .lock-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;transition:opacity .3s}
+  .lock-screen.hidden{opacity:0;pointer-events:none}
+  .lock-box{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:36px 32px;width:380px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.12);text-align:center}
+  .lock-icon{font-size:40px;margin-bottom:12px}
+  .lock-title{font-size:18px;font-weight:700;margin-bottom:4px}
+  .lock-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+  .lock-input{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);outline:none;text-align:center;font-family:'DM Mono',monospace;letter-spacing:.05em;transition:border-color .15s}
+  .lock-input:focus{border-color:var(--wtr);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+  .lock-btn{width:100%;padding:11px;border:none;border-radius:8px;background:var(--wtr);color:#fff;font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;font-family:'Noto Sans JP',sans-serif;transition:opacity .15s}
+  .lock-btn:hover{opacity:.85}
+  .lock-error{color:var(--miss);font-size:12px;margin-top:10px;min-height:18px;font-weight:500}
+
+  /* ====== メイン画面 ====== */
+  .app{display:none}
+  .app.visible{display:block}
 
   .topbar{height:46px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:10px;position:sticky;top:0;z-index:50;box-shadow:var(--sh)}
   .topbar-title{font-weight:700;font-size:14px;letter-spacing:-.01em;flex:1}
@@ -118,8 +135,24 @@
 </head>
 <body>
 
+<!-- ====== パスワード画面 ====== -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-box">
+    <div class="lock-icon">🔒</div>
+    <div class="lock-title">代行不可検索ダッシュボード</div>
+    <div class="lock-sub">アクセスするにはパスワードを入力してください</div>
+    <input type="password" class="lock-input" id="lockInput" placeholder="パスワード"
+      onkeydown="if(event.key==='Enter')unlock()">
+    <button class="lock-btn" onclick="unlock()">ログイン</button>
+    <div class="lock-error" id="lockError"></div>
+  </div>
+</div>
+
+<!-- ====== メイン画面 ====== -->
+<div class="app" id="app">
+
 <header class="topbar">
-  <span class="topbar-title">📋 電話番号検索ダッシュボード</span>
+  <span class="topbar-title">📋 代行不可検索ダッシュボード</span>
   <div class="status-dot loading" id="st-dot"></div>
   <span class="status-text" id="st-text">読み込み中…</span>
   <div class="dk-wrap" onclick="toggleDark()">
@@ -166,7 +199,39 @@
   </div>
 </div>
 
+</div><!-- /app -->
+
 <script>
+/* ====== パスワード認証 ====== */
+const PASS = 'intern@estate';
+const AUTH_KEY = 'infraDash_auth';
+
+function unlock(){
+  const input = document.getElementById('lockInput');
+  const error = document.getElementById('lockError');
+  if(input.value === PASS){
+    sessionStorage.setItem(AUTH_KEY, '1');
+    document.getElementById('lockScreen').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    loadData();
+  } else {
+    error.textContent = 'パスワードが正しくありません';
+    input.value = '';
+    input.focus();
+  }
+}
+
+/* セッション中は再入力不要 */
+(function checkAuth(){
+  if(sessionStorage.getItem(AUTH_KEY)==='1'){
+    document.getElementById('lockScreen').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    loadData();
+  } else {
+    document.getElementById('lockInput').focus();
+  }
+})();
+
 /* ====== スプレッドシートURL ====== */
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQKSJF2qsdE6kZWUTqpKFbbdpmFggSOWIx4B1qr2dyj3z3VXs1c3FfYZbiYcJpM93YW9lTLbNfWktwh/pub?gid=0&single=true&output=csv';
 const FORM_URL = '#';
@@ -178,20 +243,12 @@ const COL = {
   proxy:'代行判定', note:'備考'
 };
 
-/* ====== インフラ種別マッピング ====== */
 const INFRA_MAP = { elec:'電気', gas:'ガス', wtr:'水道' };
 const INFRA_ICON = { '電気':'⚡', 'ガス':'🔥', '水道':'💧' };
-const PANEL_LABEL = { elec:'電気', gas:'ガス', wtr:'水道' };
-
 let DATA = [];
 
-/* ====== 初期化 ====== */
-(function init(){
-  if(localStorage.getItem('dk')==='1') document.documentElement.setAttribute('data-dark','');
-  loadData();
-})();
-
 /* ====== ダークモード ====== */
+(function(){if(localStorage.getItem('dk')==='1')document.documentElement.setAttribute('data-dark','');})();
 function toggleDark(){
   const on=document.documentElement.toggleAttribute('data-dark');
   localStorage.setItem('dk',on?'1':'');
@@ -205,6 +262,7 @@ function updateStatus(type,msg){
 
 /* ====== CSV読込 ====== */
 async function loadData(){
+  if(DATA.length>0) return;
   updateStatus('loading','データ読み込み中…');
   try{
     const res=await fetch(SHEET_URL);
@@ -258,22 +316,22 @@ function proxyClass(val){
   return '';
 }
 
-/* ====== インフラ種別でフィルタ ====== */
-function matchInfra(rowInfra, infraType){
-  return (rowInfra||'').includes(infraType);
+/* ====== インフラ種別フィルタ ====== */
+function matchInfra(rowInfra,infraType){
+  return(rowInfra||'').includes(infraType);
 }
 
-/* ====== 他インフラで登録があるか調べる ====== */
-function findOtherInfra(query, currentInfraType){
-  const allInfraTypes = ['電気','ガス','水道'];
-  const others = [];
-  allInfraTypes.forEach(infra=>{
-    if(infra===currentInfraType) return;
-    const found = DATA.some(row=>{
-      if(!matchInfra((row[COL.infra]||'').trim(), infra)) return false;
+/* ====== 他インフラで登録があるか ====== */
+function findOtherInfra(query,currentInfraType){
+  const allTypes=['電気','ガス','水道'];
+  const others=[];
+  allTypes.forEach(infra=>{
+    if(infra===currentInfraType)return;
+    const found=DATA.some(row=>{
+      if(!matchInfra((row[COL.infra]||'').trim(),infra))return false;
       return digits(row[COL.phone])===query;
     });
-    if(found) others.push(infra);
+    if(found)others.push(infra);
   });
   return others;
 }
@@ -308,19 +366,18 @@ function go(panel){
     const infraType=INFRA_MAP[panel];
 
     const hits=DATA.filter(row=>{
-      if(!matchInfra((row[COL.infra]||'').trim(), infraType)) return false;
+      if(!matchInfra((row[COL.infra]||'').trim(),infraType))return false;
       return digits(row[COL.phone])===query;
     });
 
     if(hits.length>0){
       renderHits(el,query,hits);
     } else {
-      /* 他のインフラで登録があるか調べる */
-      const others = findOtherInfra(query, infraType);
+      const others=findOtherInfra(query,infraType);
       if(others.length>0){
-        renderOtherInfra(el, raw, others, infraType);
+        renderOtherInfra(el,raw,others);
       } else {
-        renderMiss(el, raw);
+        renderMiss(el,raw);
       }
     }
   },200);
@@ -356,10 +413,10 @@ function renderHits(el,query,hits){
   '</div>';
 }
 
-/* ====== 他インフラで登録あり表示 ====== */
-function renderOtherInfra(el, raw, others, currentInfra){
-  const otherNames = others.map(o=> INFRA_ICON[o]+' '+o).join('・');
-  const otherPanels = others.map(o=>'<strong>'+o+'</strong>').join('・');
+/* ====== 他インフラで登録あり ====== */
+function renderOtherInfra(el,raw,others){
+  const otherNames=others.map(o=>INFRA_ICON[o]+' '+o).join('・');
+  const otherPanels=others.map(o=>'<strong>'+o+'</strong>').join('・');
 
   el.innerHTML='<div class="ri">'+
     '<div class="rphrow">'+
@@ -373,7 +430,7 @@ function renderOtherInfra(el, raw, others, currentInfra){
   '</div>';
 }
 
-/* ====== 完全未登録表示 ====== */
+/* ====== 完全未登録 ====== */
 function renderMiss(el,raw){
   el.innerHTML='<div class="ri">'+
     '<div class="rphrow">'+
