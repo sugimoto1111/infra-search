@@ -16,6 +16,7 @@
     --miss:#DC2626; --miss-bg:#FEF2F2; --miss-br:#FECACA;
     --warn:#D97706; --warn-bg:#FFFBEB; --warn-br:#FDE68A;
     --info:#2563EB; --info-bg:#EFF6FF; --info-br:#BFDBFE;
+    --other:#8b5cf6; --other-bg:#f5f3ff; --other-br:#c4b5fd;
     --cond:#7c3aed; --cond-bg:#f5f3ff; --cond-br:#c4b5fd;
     --na:#6b7280; --na-bg:#f3f4f6; --na-br:#d1d5db;
     --sh:0 2px 8px rgba(0,0,0,.07),0 0 1px rgba(0,0,0,.08);
@@ -29,6 +30,7 @@
     --miss-bg:#1C0404; --miss-br:#7F1D1D;
     --warn-bg:#1C1300; --warn-br:#92400E;
     --info-bg:#0C1929; --info-br:#1E40AF;
+    --other-bg:#1a1033; --other-br:#5b21b6;
     --cond-bg:#1a1033; --cond-br:#5b21b6;
     --na-bg:#1f2028; --na-br:#374151;
     --sh:0 2px 8px rgba(0,0,0,.3),0 0 1px rgba(0,0,0,.4);
@@ -88,6 +90,7 @@
   .badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;border:1px solid}
   .b-hit{background:var(--hit-bg);color:var(--hit);border-color:var(--hit-br)}
   .b-miss{background:var(--miss-bg);color:var(--miss);border-color:var(--miss-br)}
+  .b-other{background:var(--other-bg);color:var(--other);border-color:var(--other-br)}
 
   .result-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px}
   .result-card+.result-card{margin-top:8px}
@@ -107,6 +110,7 @@
   .alert{border-radius:8px;padding:14px 16px;margin-top:10px;font-size:12.5px;line-height:1.7;border:1px solid}
   .alert-warn{background:var(--warn-bg);border-color:var(--warn-br);color:var(--warn)}
   .alert-info{background:var(--info-bg);border-color:var(--info-br);color:var(--info)}
+  .alert-other{background:var(--other-bg);border-color:var(--other-br);color:var(--other)}
   .alert a{color:var(--wtr);font-weight:600;text-decoration:underline}
   .alert a:hover{opacity:.8}
   .miss-msg{font-size:13px;color:var(--muted);margin-top:6px}
@@ -163,23 +167,22 @@
 </div>
 
 <script>
-/* ====== スプレッドシートURL（直接埋込） ====== */
+/* ====== スプレッドシートURL ====== */
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQKSJF2qsdE6kZWUTqpKFbbdpmFggSOWIx4B1qr2dyj3z3VXs1c3FfYZbiYcJpM93YW9lTLbNfWktwh/pub?gid=0&single=true&output=csv';
-const FORM_URL = '#'; /* Googleフォーム作成後にここを差し替え */
+const FORM_URL = '#';
 
-/* ====== 列名（実データ準拠） ====== */
+/* ====== 列名 ====== */
 const COL = {
-  id:    '管理ID',
-  phone: '検索用番号',
-  disp:  '表示用番号',
-  infra: 'インフラ種別',
-  dest:  '手配先名称',
-  area:  '地域名',
-  proxy: '代行判定',
-  note:  '備考'
+  id:'管理ID', phone:'検索用番号', disp:'表示用番号',
+  infra:'インフラ種別', dest:'手配先名称', area:'地域名',
+  proxy:'代行判定', note:'備考'
 };
 
+/* ====== インフラ種別マッピング ====== */
 const INFRA_MAP = { elec:'電気', gas:'ガス', wtr:'水道' };
+const INFRA_ICON = { '電気':'⚡', 'ガス':'🔥', '水道':'💧' };
+const PANEL_LABEL = { elec:'電気', gas:'ガス', wtr:'水道' };
+
 let DATA = [];
 
 /* ====== 初期化 ====== */
@@ -195,11 +198,9 @@ function toggleDark(){
 }
 
 /* ====== ステータス ====== */
-function updateStatus(type, msg){
-  const dot=document.getElementById('st-dot');
-  const txt=document.getElementById('st-text');
-  dot.className='status-dot '+type;
-  txt.textContent=msg;
+function updateStatus(type,msg){
+  document.getElementById('st-dot').className='status-dot '+type;
+  document.getElementById('st-text').textContent=msg;
 }
 
 /* ====== CSV読込 ====== */
@@ -210,7 +211,7 @@ async function loadData(){
     if(!res.ok) throw new Error('HTTP '+res.status);
     DATA=parseCSV(await res.text());
     if(DATA.length===0) throw new Error('データが0件です');
-    updateStatus('ok', DATA.length+'件 読込済');
+    updateStatus('ok',DATA.length+'件 読込済');
   }catch(e){
     updateStatus('ng','読込失敗: '+e.message);
   }
@@ -221,7 +222,7 @@ function parseCSV(t){
   if(ls.length<2)return[];
   const hs=splitCSV(ls[0]).map(h=>h.replace(/^\uFEFF/,'').trim());
   return ls.slice(1).filter(l=>l.trim()).map(l=>{
-    const vs=splitCSV(l); const o={};
+    const vs=splitCSV(l);const o={};
     hs.forEach((h,i)=>o[h]=(vs[i]||'').trim());
     return o;
   });
@@ -233,29 +234,48 @@ function splitCSV(line){
 }
 
 /* ====== ユーティリティ ====== */
-function digits(s){ return(s||'').replace(/[^\d]/g,''); }
+function digits(s){return(s||'').replace(/[^\d]/g,'');}
 function formatPhone(d){
-  if(d.length===11) return d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
-  if(d.length===10) return d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+  if(d.length===11)return d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
+  if(d.length===10)return d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
   return d;
 }
 
 /* ====== バリデーション ====== */
 function validate(raw){
   const d=digits(raw);
-  if(d.length<10||d.length>11){
-    return{ok:false, msg:'電話番号は10桁または11桁で入力してください（現在: '+d.length+'桁）'};
-  }
-  return{ok:true, digits:d};
+  if(d.length<10||d.length>11)
+    return{ok:false,msg:'電話番号は10桁または11桁で入力してください（現在: '+d.length+'桁）'};
+  return{ok:true,digits:d};
 }
 
-/* ====== 代行判定の分類 ====== */
+/* ====== 代行判定の色分け ====== */
 function proxyClass(val){
-  if(/○|可/.test(val) && !/不可|×|条件/.test(val)) return 'v-ok';
-  if(/×|不可/.test(val)) return 'v-ng';
-  if(/△|条件/.test(val)) return 'v-cond';
-  if(val==='-'||val===''||val==='—') return 'v-na';
+  if(/○|可/.test(val)&&!/不可|×|条件/.test(val))return 'v-ok';
+  if(/×|不可/.test(val))return 'v-ng';
+  if(/△|条件/.test(val))return 'v-cond';
+  if(val==='-'||val===''||val==='—')return 'v-na';
   return '';
+}
+
+/* ====== インフラ種別でフィルタ ====== */
+function matchInfra(rowInfra, infraType){
+  return (rowInfra||'').includes(infraType);
+}
+
+/* ====== 他インフラで登録があるか調べる ====== */
+function findOtherInfra(query, currentInfraType){
+  const allInfraTypes = ['電気','ガス','水道'];
+  const others = [];
+  allInfraTypes.forEach(infra=>{
+    if(infra===currentInfraType) return;
+    const found = DATA.some(row=>{
+      if(!matchInfra((row[COL.infra]||'').trim(), infra)) return false;
+      return digits(row[COL.phone])===query;
+    });
+    if(found) others.push(infra);
+  });
+  return others;
 }
 
 /* ====== 検索 ====== */
@@ -288,15 +308,21 @@ function go(panel){
     const infraType=INFRA_MAP[panel];
 
     const hits=DATA.filter(row=>{
-      const ri=(row[COL.infra]||'').trim();
-      /* インフラ種別フィルタ：完全一致 or 複合（ガス・水道など）に対応 */
-      if(!ri.includes(infraType)) return false;
-      const rd=digits(row[COL.phone]);
-      return rd===query;
+      if(!matchInfra((row[COL.infra]||'').trim(), infraType)) return false;
+      return digits(row[COL.phone])===query;
     });
 
-    if(hits.length>0) renderHits(el,query,hits);
-    else renderMiss(el,raw);
+    if(hits.length>0){
+      renderHits(el,query,hits);
+    } else {
+      /* 他のインフラで登録があるか調べる */
+      const others = findOtherInfra(query, infraType);
+      if(others.length>0){
+        renderOtherInfra(el, raw, others, infraType);
+      } else {
+        renderMiss(el, raw);
+      }
+    }
   },200);
 }
 
@@ -330,14 +356,31 @@ function renderHits(el,query,hits){
   '</div>';
 }
 
-/* ====== 未登録表示 ====== */
+/* ====== 他インフラで登録あり表示 ====== */
+function renderOtherInfra(el, raw, others, currentInfra){
+  const otherNames = others.map(o=> INFRA_ICON[o]+' '+o).join('・');
+  const otherPanels = others.map(o=>'<strong>'+o+'</strong>').join('・');
+
+  el.innerHTML='<div class="ri">'+
+    '<div class="rphrow">'+
+      '<span class="rph">'+raw+'</span>'+
+      '<span class="badge b-other">↗ 別カテゴリで登録あり</span>'+
+    '</div>'+
+    '<div class="alert alert-other">'+
+      '🔍 この番号は '+otherNames+' で登録されています。<br>'+
+      otherPanels+' の検索欄で再度検索してください。'+
+    '</div>'+
+  '</div>';
+}
+
+/* ====== 完全未登録表示 ====== */
 function renderMiss(el,raw){
   el.innerHTML='<div class="ri">'+
     '<div class="rphrow">'+
       '<span class="rph">'+raw+'</span>'+
       '<span class="badge b-miss">✕ 未登録</span>'+
     '</div>'+
-    '<div class="miss-msg">この電話番号は登録されていません。</div>'+
+    '<div class="miss-msg">この電話番号はどのインフラにも登録されていません。</div>'+
     '<div class="alert alert-info" style="margin-top:14px">'+
       '📝 代行は「<strong>可能</strong>」です。<br>'+
       '代行を希望の場合は <a href="'+FORM_URL+'" target="_blank">Google フォーム</a> より申請お願いします。'+
